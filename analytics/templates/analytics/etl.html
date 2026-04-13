@@ -1,0 +1,102 @@
+{% extends 'analytics/base.html' %}
+{% block title %}ETL Pipeline{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h2>ETL Pipeline</h2>
+  <p>Extract → Transform → Load from DVD Rental to OLAP star schema</p>
+</div>
+
+{% if result %}
+  {% if result.success %}
+  <div class="alert alert-success">
+    ✓ Pipeline completed successfully on {{ result.snapshot_date }}
+  </div>
+  <div class="metrics-grid metrics-grid--mb">
+    <div class="metric-item">
+      <div class="metric-value">{{ result.records_extracted }}</div>
+      <div class="metric-label">Records Extracted</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-value">{{ result.customers_transformed }}</div>
+      <div class="metric-label">Customers Transformed</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-value">{{ result.facts_loaded }}</div>
+      <div class="metric-label">Facts Loaded to OLAP</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-error">✗ Error: {{ result.error }}</div>
+  {% endif %}
+{% endif %}
+
+<div class="form-card section-mb">
+  <div class="chart-title section-title">Pipeline Actions</div>
+  <div class="action-grid">
+
+    <div class="action-box">
+      <h3 class="action-title">Step 1 — Run Full ETL</h3>
+      <p class="action-desc">
+        Extracts all transactions from dvdrental source tables, computes
+        RFM metrics per customer, and loads results into the OLAP star schema.
+        Always run this first before training the model.
+      </p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="run_etl">
+        <button type="submit" class="btn btn-primary">▶ Run ETL Pipeline</button>
+      </form>
+    </div>
+
+    <div class="action-box">
+      <h3 class="action-title">Step 2 — Update CLV Predictions</h3>
+      <p class="action-desc">
+        After the ML model is trained, run this to populate the
+        <code>clv_predicted</code> and <code>clv_segment</code> columns
+        in the fact table for every customer in the OLAP layer.
+      </p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="predict_all">
+        <button type="submit" class="btn btn-secondary">↻ Update All Predictions</button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<div class="form-card">
+  <div class="chart-title section-title">How the ETL Pipeline Works</div>
+  <div class="steps-grid">
+    <div class="step-box step-box--border">
+      <div class="step-number">01</div>
+      <div class="step-name">Extract</div>
+      <div class="step-desc">
+        Executes a raw SQL JOIN across customer, rental, payment,
+        address, city, country, film, and category tables from
+        the dvdrental OLTP source database.
+      </div>
+    </div>
+    <div class="step-box step-box--border">
+      <div class="step-number">02</div>
+      <div class="step-name">Transform</div>
+      <div class="step-desc">
+        Groups by customer and computes RFM features: Recency
+        (days since last rental), Frequency (total rentals),
+        Monetary average, customer tenure, and payment count.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-number">03</div>
+      <div class="step-name">Load</div>
+      <div class="step-desc">
+        Upserts records into dim_customer, dim_time, and
+        fact_customer_clv using Django. Uses snapshot_date
+        as the time dimension key for OLAP partitioning.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

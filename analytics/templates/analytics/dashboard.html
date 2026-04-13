@@ -1,0 +1,133 @@
+{% extends 'analytics/base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h2>Customer Lifetime Value Dashboard</h2>
+  <p>Predicted revenue analytics from the DVD Rental database</p>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Total Lifetime Revenue</div>
+    <div class="kpi-value">${{ kpis.total_revenue|floatformat:0 }}</div>
+    <div class="kpi-sub">Across all customers</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Avg Predicted CLV</div>
+    <div class="kpi-value">${{ kpis.avg_clv|floatformat:2 }}</div>
+    <div class="kpi-sub">Per customer</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Total Customers</div>
+    <div class="kpi-value">{{ kpis.total_customers }}</div>
+    <div class="kpi-sub">Unique in OLAP</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Avg Recency</div>
+    <div class="kpi-value">{{ kpis.avg_recency|floatformat:0 }}d</div>
+    <div class="kpi-sub">Days since last rental</div>
+  </div>
+</div>
+
+<!-- Segment summary badges -->
+<div class="segment-summary">
+  {% for seg in segments %}
+  <div class="seg-badge seg-badge--{{ seg.clv_segment|lower }}">
+    <span class="seg-badge-label">{{ seg.clv_segment }}</span>
+    <span class="seg-badge-count">{{ seg.count }} customers</span>
+    <span class="seg-badge-rev">${{ seg.revenue|floatformat:0 }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Charts Row -->
+<div class="chart-grid">
+  <div class="chart-card">
+    <div class="chart-title">Revenue by CLV Segment</div>
+    <div class="chart-subtitle">Total actual revenue grouped by predicted segment</div>
+    <div id="chart_seg"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Customer Segment Distribution</div>
+    <div class="chart-subtitle">Proportion of customers in each CLV tier</div>
+    <div id="chart_pie"></div>
+  </div>
+</div>
+
+
+<!-- Top Customers Table -->
+<div class="table-card">
+  <div class="table-card-header">
+    <div class="chart-title">Top 10 Customers by Predicted CLV</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Customer</th>
+        <th>Email</th>
+        <th>Recency (days)</th>
+        <th>Frequency</th>
+        <th>Avg Monetary</th>
+        <th>Tenure (days)</th>
+        <th>Payment Count</th>
+        <th>Past Total Spend</th>
+        <th>Predicted CLV</th>
+        <th>Segment</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for fact in top_customers %}
+      <tr>
+        <td class="rank-cell">{{ forloop.counter }}</td>
+        <td><strong>{{ fact.customer.full_name }}</strong></td>
+        <td>{{ fact.customer.email }}</td>
+        <td>{{ fact.recency_days }}</td>
+        <td>{{ fact.frequency }}</td>
+        <td>${{ fact.monetary_avg }}</td>
+        <td>{{ fact.customer_tenure_days }}</td>
+        <td>{{ fact.payment_count }}</td>
+        <td>${{ fact.total_payments }}</td>
+        <td><strong>${{ fact.clv_predicted }}</strong></td>
+        <td>
+          <span class="badge badge-{{ fact.clv_segment|lower }}">
+            {{ fact.clv_segment }}
+          </span>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="9" class="empty-row">
+          No data yet — run: <code>python manage.py run_etl</code> then
+          <code>python manage.py train_model</code> then
+          <code>python manage.py predict_customers</code>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  const cfg = { responsive: true, displayModeBar: false };
+  const base = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'Georgia, serif', color: '#3d2b1f', size: 12 },
+    margin: { l: 40, r: 20, t: 10, b: 50 },
+    height: 300,
+  };
+
+  Plotly.newPlot('chart_seg', {{ chart_seg| safe }}.data,
+    Object.assign({}, {{ chart_seg| safe }}.layout, base), cfg);
+
+  Plotly.newPlot('chart_pie', {{ chart_pie| safe }}.data,
+    Object.assign({}, {{ chart_pie| safe }}.layout, base), cfg);
+
+  Plotly.newPlot('chart_rfm', {{ chart_rfm| safe }}.data,
+    Object.assign({}, {{ chart_rfm| safe }}.layout, base, { height: 320 }), cfg);
+</script>
+
+{% endblock %}

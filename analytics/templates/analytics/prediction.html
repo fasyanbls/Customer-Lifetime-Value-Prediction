@@ -1,0 +1,144 @@
+{% extends 'analytics/base.html' %}
+{% block title %}Predict CLV{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h2>Predict Customer Lifetime Value</h2>
+  <p>Enter customer RFM metrics to get a real-time CLV prediction with confidence range</p>
+</div>
+
+<div class="form-card section-mb">
+  <div class="chart-title section-title">Customer RFM Features</div>
+  <form method="post">
+    {% csrf_token %}
+    <div class="predict-grid">
+      <div class="form-group">
+        <label>Recency — Days since last rental</label>
+        <input type="number" name="recency_days" placeholder="e.g. 30" min="0" required
+          value="{{ request.POST.recency_days }}">
+        <span class="field-hint">Lower = more recent = better</span>
+      </div>
+      <div class="form-group">
+        <label>Frequency — Total number of rentals</label>
+        <input type="number" name="frequency" placeholder="e.g. 25" min="1" required
+          value="{{ request.POST.frequency }}">
+        <span class="field-hint">More rentals = higher engagement</span>
+      </div>
+      <div class="form-group">
+        <label>Monetary Average — Avg spend per rental ($)</label>
+        <input type="number" name="monetary_avg" step="0.01" placeholder="e.g. 4.50" min="0" required
+          value="{{ request.POST.monetary_avg }}">
+        <span class="field-hint">Willingness to pay signal</span>
+      </div>
+      <div class="form-group">
+        <label>Tenure — Days as an active customer</label>
+        <input type="number" name="tenure_days" placeholder="e.g. 365" min="0" required
+          value="{{ request.POST.tenure_days }}">
+        <span class="field-hint">Longer tenure = more loyal</span>
+      </div>
+      <div class="form-group">
+        <label>Payment Count — Total payment transactions</label>
+        <input type="number" name="payment_count" placeholder="e.g. 20" min="1" required
+          value="{{ request.POST.payment_count }}">
+        <span class="field-hint">Each rental may have 1 payment</span>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">◎ Predict CLV</button>
+  </form>
+</div>
+
+{% if prediction %}
+{% if prediction.error %}
+<div class="alert alert-error">✗ {{ prediction.error }}</div>
+{% else %}
+
+<!-- Main Result -->
+<div class="predict-result">
+  <div class="clv-label">Predicted Customer Lifetime Value</div>
+  <div class="clv-amount">${{ prediction.predicted_clv }}</div>
+  <div class="clv-range">
+    Confidence range: <strong>${{ prediction.ci_lower }}</strong> — <strong>${{ prediction.ci_upper }}</strong>
+    <span class="ci-note">(± 15% uncertainty margin)</span>
+  </div>
+  <div class="clv-segment-row">
+    <span class="badge badge-{{ prediction.segment|lower|cut:' value' }}">
+      {{ prediction.segment }}
+    </span>
+  </div>
+
+  {% if prediction.chart_gauge %}
+  <div id="chart_gauge" style="max-width: 400px; margin: 10px auto;"></div>
+  {% endif %}
+
+  <p class="clv-advice">
+    {% if prediction.segment == 'High Value' %}
+    This customer is in the top tier. Prioritize retention — offer loyalty rewards,
+    early access to new films, and personalized recommendations.
+    {% elif prediction.segment == 'Medium Value' %}
+    This customer has growth potential. Engage with targeted promotions and
+    rental recommendations to move them to High Value.
+    {% else %}
+    This customer needs re-engagement. Consider special discount campaigns
+    or reminders to increase rental frequency.
+    {% endif %}
+  </p>
+</div>
+
+<!-- RFM Score Breakdown -->
+<div class="form-card section-mb">
+  <div class="chart-title section-title">RFM Score Breakdown</div>
+  <div class="rfm-grid">
+    <div class="rfm-item rfm-item--{{ prediction.rfm_recency|lower }}">
+      <div class="rfm-letter">R</div>
+      <div class="rfm-name">Recency</div>
+      <div class="rfm-score">{{ prediction.rfm_recency }}</div>
+      <div class="rfm-desc">
+        {% if prediction.rfm_recency == 'Good' %}Rented within the last 50 days
+        {% elif prediction.rfm_recency == 'Fair' %}Rented 50–100 days ago
+        {% else %}Has not rented in over 100 days{% endif %}
+      </div>
+    </div>
+    <div class="rfm-item rfm-item--{{ prediction.rfm_frequency|lower }}">
+      <div class="rfm-letter">F</div>
+      <div class="rfm-name">Frequency</div>
+      <div class="rfm-score">{{ prediction.rfm_frequency }}</div>
+      <div class="rfm-desc">
+        {% if prediction.rfm_frequency == 'Good' %}More than 25 total rentals
+        {% elif prediction.rfm_frequency == 'Fair' %}10–25 total rentals
+        {% else %}Fewer than 10 rentals{% endif %}
+      </div>
+    </div>
+    <div class="rfm-item rfm-item--{{ prediction.rfm_monetary|lower }}">
+      <div class="rfm-letter">M</div>
+      <div class="rfm-name">Monetary</div>
+      <div class="rfm-score">{{ prediction.rfm_monetary }}</div>
+      <div class="rfm-desc">
+        {% if prediction.rfm_monetary == 'Good' %}Spends more than $5.00 per rental
+        {% elif prediction.rfm_monetary == 'Fair' %}Spends $3.00–$5.00 per rental
+        {% else %}Spends less than $3.00 per rental{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endif %}
+
+{% if prediction and prediction.chart_gauge %}
+<script>
+  const cfg = { responsive: true, displayModeBar: false };
+  const base = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'Georgia, serif', color: '#3d2b1f', size: 12 },
+  };
+
+  const gauge = {{ prediction.chart_gauge| safe }};
+  if (typeof Plotly !== 'undefined') {
+    Plotly.newPlot('chart_gauge', gauge.data,
+      Object.assign({}, gauge.layout, base), cfg);
+  }
+</script>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,279 @@
+{% extends 'analytics/base.html' %}
+{% load tz %}
+{% block title %}ML Model{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h2>ML Model Management</h2>
+  <p>Compare models, train the best one, and understand its accuracy</p>
+</div>
+
+<!-- ── STEP 1: Compare Models ── -->
+<div class="form-card section-mb">
+  <div class="chart-title section-title">Step 1 — Compare Models</div>
+  <p class="action-desc">
+    Run a fair comparison of 3 algorithms on the same data using 80/20 chronological
+    split and 5-fold TimeSeriesSplit cross-validation. 
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="compare">
+    <button type="submit" class="btn btn-secondary">⟳ Compare All Models</button>
+  </form>
+</div>
+
+{% if compare_result %}
+{% if compare_result.success %}
+<div class="alert alert-success">✓ Comparison complete — {{ compare_result.n_samples }} customers evaluated</div>
+
+<!-- Comparison Table -->
+<div class="table-card section-mb">
+  <div class="table-card-header">
+    <div class="chart-title">Model Comparison Results</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>MAE ($) ↓ lower is better</th>
+        <th>RMSE ($) ↓ lower is better</th>
+        <th>R² Score ↑ higher is better</th>
+        <th>CV R² Mean</th>
+        <th>CV R² Std</th>
+        <th>Verdict</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for model_name, scores in compare_result.results.items %}
+      <tr class="{% if model_name == 'Gradient Boosting' %}row-highlight{% endif %}">
+        <td>
+          <strong>{{ model_name }}</strong>
+          {% if model_name == 'Gradient Boosting' %}
+          <span class="badge badge-high">Best</span>
+          {% elif model_name == 'Linear Regression' %}
+          <span class="badge badge-low">Baseline</span>
+          {% endif %}
+        </td>
+        <td>${{ scores.mae }}</td>
+        <td>${{ scores.rmse }}</td>
+        <td><strong>{{ scores.r2 }}</strong></td>
+        <td>{{ scores.cv_r2_mean }}</td>
+        <td>± {{ scores.cv_r2_std }}</td>
+        <td>
+          {% if model_name == 'Gradient Boosting' %}
+          Best overall fit
+          {% elif model_name == 'Random Forest' %}
+          Good but slightly overfit
+          {% else %}
+          Simple baseline
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if chart_compare %}
+<div class="chart-card section-mb">
+  <div class="chart-title">R² Score Comparison — Test Set vs Cross-Validation</div>
+  <div class="chart-subtitle">
+    Higher R² means the model explains more variance in CLV.
+    CV R² is more reliable — it tests on 5 different unseen folds.
+  </div>
+  <div id="chart_compare"></div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="alert alert-error">✗ {{ compare_result.error }}</div>
+{% endif %}
+{% endif %}
+
+<!-- ── STEP 2: Train Best Model ── -->
+<div class="two-col-grid">
+  <div class="form-card">
+    <div class="chart-title section-title">Step 2 — Train Final Model</div>
+    <p class="action-desc">
+      Trains Gradient Boosting on 80% of the data, validates on the remaining 20%.
+      Saves the trained pipeline (StandardScaler + GBR) to
+      <code>models/clv_model.pkl</code> and logs metrics.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="train">
+      <button type="submit" class="btn btn-primary">◉ Train Gradient Boosting</button>
+    </form>
+  </div>
+
+  <div class="form-card">
+    <div class="chart-title section-title">Model Hyperparameters</div>
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Algorithm</td>
+        <td><strong>GradientBoostingRegressor</strong></td>
+      </tr>
+      <tr>
+        <td class="info-label">n_estimators</td>
+        <td>200 trees (boosting rounds)</td>
+      </tr>
+      <tr>
+        <td class="info-label">learning_rate</td>
+        <td>0.05 — slow/conservative, avoids overfitting</td>
+      </tr>
+      <tr>
+        <td class="info-label">max_depth</td>
+        <td>4 — limits each tree's complexity</td>
+      </tr>
+      <tr>
+        <td class="info-label">subsample</td>
+        <td>0.8 — uses 80% of data per tree (stochastic)</td>
+      </tr>
+      <tr>
+        <td class="info-label">min_samples_leaf</td>
+        <td>3 — prevents tiny leaf nodes</td>
+      </tr>
+      <tr>
+        <td class="info-label">Target</td>
+        <td>log1p(total_payments) — reduces right skew</td>
+      </tr>
+      <tr>
+        <td class="info-label">Train/Test split</td>
+        <td>80% train / 20% test (chronological)</td>
+      </tr>
+      <tr>
+        <td class="info-label">CV strategy</td>
+        <td>TimeSeriesSplit (5 folds, no data leakage)</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+{% if result %}
+{% if result.success %}
+<div class="alert alert-success">
+  ✓ Model trained — {{ result.n_train }} training samples / {{ result.n_test }} test samples
+</div>
+
+<!-- Accuracy Metrics -->
+<div class="metrics-grid metrics-grid--mb">
+  <div class="metric-item">
+    <div class="metric-value">${{ result.mae }}</div>
+    <div class="metric-label">MAE — Mean Absolute Error</div>
+    <div class="metric-hint">On average, predictions are off by ${{ result.mae }}</div>
+  </div>
+  <div class="metric-item">
+    <div class="metric-value">${{ result.rmse }}</div>
+    <div class="metric-label">RMSE — Root Mean Squared Error</div>
+    <div class="metric-hint">Penalizes large errors more than MAE</div>
+  </div>
+  <div class="metric-item">
+    <div class="metric-value">{{ result.r2 }}</div>
+    <div class="metric-label">R² — Coefficient of Determination</div>
+    <div class="metric-hint">
+      {% if result.r2 >= 0.85 %}Excellent — model explains {{ result.r2|floatformat:0 }}% of CLV variance
+      {% elif result.r2 >= 0.70 %}Good fit for CLV prediction
+      {% else %}Moderate — consider adding more features{% endif %}
+    </div>
+  </div>
+  <div class="metric-item">
+    <div class="metric-value">{{ result.cv_r2_mean }} <small>± {{ result.cv_r2_std }}</small></div>
+    <div class="metric-label">Cross-Validation R² (5-fold TSS)</div>
+    <div class="metric-hint">Most reliable accuracy estimate — tested on 5 unseen folds</div>
+  </div>
+</div>
+
+<!-- Actual vs Predicted chart -->
+{% if chart_avp %}
+<div class="chart-card section-mb">
+  <div class="chart-title">Actual vs Predicted CLV — Test Set</div>
+  <div class="chart-subtitle">
+    Points closer to the dashed diagonal line = more accurate predictions.
+    A perfect model would have all points exactly on that line.
+  </div>
+  <div id="chart_avp"></div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="alert alert-error">✗ {{ result.error }}</div>
+{% endif %}
+{% endif %}
+
+<!-- ── Feature Importance ── -->
+{% if chart_fi %}
+<div class="chart-card section-mb">
+  <div class="chart-title">Feature Importance — What Drives CLV?</div>
+  <div class="chart-subtitle">
+    Higher % means that feature has more influence on the CLV prediction.
+    Frequency and Monetary are typically the strongest drivers.
+  </div>
+  <div id="chart_fi"></div>
+</div>
+{% endif %}
+
+<!-- ── Training History ── -->
+<div class="table-card">
+  <div class="table-card-header">
+    <div class="chart-title">Training History</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Trained At</th>
+        <th>Algorithm</th>
+        <th>MAE</th>
+        <th>RMSE</th>
+        <th>R² Score</th>
+        <th>Samples</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td>{{ log.trained_at|date:"Y-m-d H:i" }}</td>
+        <td>{{ log.algorithm }}</td>
+        <td>${{ log.mae }}</td>
+        <td>${{ log.rmse }}</td>
+        <td>{{ log.r2_score }}</td>
+        <td>{{ log.n_samples }}</td>
+        <td class="notes-cell">{{ log.notes }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="empty-row">No training runs yet — click Train Model above</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  const cfg = { responsive: true, displayModeBar: false };
+  const base = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'Georgia, serif', color: '#3d2b1f', size: 12 },
+  };
+
+  {% if chart_compare %}
+  const cmp = {{ chart_compare| safe }};
+  Plotly.newPlot('chart_compare', cmp.data,
+    Object.assign({}, cmp.layout, base, { height: 300, margin: { l: 40, r: 20, t: 10, b: 50 } }), cfg);
+  {% endif %}
+
+  {% if chart_avp %}
+  const avp = {{ chart_avp| safe }};
+  Plotly.newPlot('chart_avp', avp.data,
+    Object.assign({}, avp.layout, base, { height: 300, margin: { l: 50, r: 20, t: 10, b: 50 } }), cfg);
+  {% endif %}
+
+  {% if chart_fi %}
+  const fi = {{ chart_fi| safe }};
+  Plotly.newPlot('chart_fi', fi.data,
+    Object.assign({}, fi.layout, base, { height: 260, margin: { l: 140, r: 60, t: 10, b: 40 } }), cfg);
+  {% endif %}
+</script>
+
+{% endblock %}
