@@ -18,8 +18,8 @@ Using RFM (Recency, Frequency, Monetary) analysis as the feature foundation, the
 **ETL Pipeline**
 - Extracts ~14,000 transaction rows from 9 joined dvdrental tables
 - Transforms into RFM metrics per customer (599 customers)
-- Loads into OLAP star schema with upsert pattern (safe to re-run)
-- Dynamic segment thresholds using data percentiles (p33/p66) — no hardcoded values
+- Loads into OLAP star schema with upsert pattern 
+- Dynamic segment thresholds using data percentiles (p33/p66) 
 
 **ML Model**
 - Compares 3 algorithms: Linear Regression, Random Forest, Gradient Boosting
@@ -54,7 +54,7 @@ Using RFM (Recency, Frequency, Monetary) analysis as the feature foundation, the
 
 **1. Clone and set up environment**
 ```bash
-git clone https://github.com/yourusername/clv_project.git
+git clone https://github.com/fasyanbls/Customer-Lifetime-Value-Prediction.git
 cd clv_project
 python -m venv django_venv
 # Windows
