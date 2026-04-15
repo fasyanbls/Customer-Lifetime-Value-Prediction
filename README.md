@@ -177,6 +177,13 @@ The DVD Rental database is a static sample dataset (data from ~2005–2007) with
 
 ---
 
+## Demo Application
+You can view the CircleBloom demo application, including an app walkthrough and feature showcase, via the following Google Drive link:
+
+🔗 Demo App (Google Drive): https://drive.google.com/file/d/1c_kvC3XDROVDodSc1YHXyE_tDWvLAXfV/view?usp=sharing
+
+---
+
 ## Screenshots
 
 *Dashboard — KPI overview and customer segment analysis*
